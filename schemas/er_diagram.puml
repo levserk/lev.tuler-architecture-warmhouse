@@ -1,0 +1,136 @@
+@startuml er_diagram
+!define LIGHTBLUE #E1F5FE
+!define LIGHTGREEN #E8F5E8
+!define LIGHTYELLOW #FFF8E1
+
+title ER-диаграмма основных сущностей экосистемы "Тёплый дом"
+
+' === ОСНОВНЫЕ СУЩНОСТИ СИСТЕМЫ ===
+
+entity User {
+    * id : UUID <<PK>>
+    --
+    * email : VARCHAR(255) <<UNIQUE>>
+    * password_hash : VARCHAR(255)
+    * first_name : VARCHAR(100)
+    * last_name : VARCHAR(100)
+    phone : VARCHAR(20)
+    * created_at : TIMESTAMP
+    * is_active : BOOLEAN
+}
+
+entity House {
+    * id : UUID <<PK>>
+    --
+    * name : VARCHAR(100)
+    * address : TEXT
+    * owner_id : UUID <<FK>>
+    * created_at : TIMESTAMP
+}
+
+entity UserHouseAccess {
+    * id : UUID <<PK>>
+    --
+    * user_id : UUID <<FK>>
+    * house_id : UUID <<FK>>
+    * access_level : ENUM('owner', 'admin', 'user', 'guest')
+    * granted_by : UUID <<FK>>
+    * granted_at : TIMESTAMP
+    * is_active : BOOLEAN
+}
+
+entity DeviceType {
+    * id : UUID <<PK>>
+    --
+    * name : VARCHAR(50) <<UNIQUE>>
+    * category : ENUM('heating', 'lighting', 'security', 'sensor')
+    * protocol : ENUM('http', 'mqtt')
+    * created_at : TIMESTAMP
+}
+
+entity Device {
+    * id : UUID <<PK>>
+    --
+    * name : VARCHAR(100)
+    * serial_number : VARCHAR(100) <<UNIQUE>>
+    * house_id : UUID <<FK>>
+    * type_id : UUID <<FK>>
+    * location : VARCHAR(100)
+    * status : ENUM('online', 'offline', 'error', 'maintenance')
+    * configuration : JSON
+    * last_seen : TIMESTAMP
+    * created_at : TIMESTAMP
+}
+
+entity Command {
+    * id : UUID <<PK>>
+    --
+    * device_id : UUID <<FK>>
+    * user_id : UUID <<FK>>
+    * action : VARCHAR(50)
+    * parameters : JSON
+    * status : ENUM('pending', 'executing', 'completed', 'failed', 'timeout')
+    * created_at : TIMESTAMP
+    * executed_at : TIMESTAMP
+    error_message : TEXT
+}
+
+entity TelemetryData {
+    * time : TIMESTAMP <<PK>>
+    * device_id : UUID <<TAG>>
+    --
+    value : DECIMAL <<FIELD>>
+    unit : VARCHAR(20) <<TAG>>
+    sensor_type : ENUM('temperature', 'humidity', 'motion') <<TAG>>
+}
+
+entity Scenario {
+    * id : UUID <<PK>>
+    --
+    * name : VARCHAR(100)
+    * description : TEXT
+    * house_id : UUID <<FK>>
+    * created_by : UUID <<FK>>
+    * is_active : BOOLEAN
+    * created_at : TIMESTAMP
+}
+
+entity Notification {
+    * id : UUID <<PK>>
+    --
+    * user_id : UUID <<FK>>
+    * title : VARCHAR(200)
+    * message : TEXT
+    * type : ENUM('alert', 'info', 'warning')
+    * status : ENUM('pending', 'sent', 'delivered')
+    * created_at : TIMESTAMP
+    * sent_at : TIMESTAMP
+}
+
+' === СВЯЗИ МЕЖДУ СУЩНОСТЯМИ ===
+
+' Основные связи
+User ||--o{ House : "владеет"
+User ||--o{ UserHouseAccess : "имеет доступ"
+House ||--o{ UserHouseAccess : "предоставляет доступ"
+User ||--o{ UserHouseAccess : "выдает права" 
+House ||--o{ Device : "содержит"
+DeviceType ||--o{ Device : "определяет тип"
+
+' Команды и управление
+User ||--o{ Command : "отправляет"
+Device ||--o{ Command : "получает"
+
+' Телеметрия
+Device ||--o{ TelemetryData : "генерирует"
+
+' Автоматизация
+House ||--o{ Scenario : "содержит"
+User ||--o{ Scenario : "создает"
+
+' Уведомления
+User ||--o{ Notification : "получает"
+
+
+
+@enduml
