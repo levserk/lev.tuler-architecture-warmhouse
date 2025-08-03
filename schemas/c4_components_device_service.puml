@@ -1,0 +1,47 @@
+@startuml c4_components_device_service
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Компоненты Device Management Service
+
+Container(api_gateway, "API Gateway", "Kong/Nginx", "Маршрутизация запросов")
+Container(automation_service, "Automation Service", "Go", "Сценарии автоматизации")
+Container(message_queue, "Message Queue", "Redis", "Асинхронные события")
+ContainerDb(main_db, "PostgreSQL", "PostgreSQL", "Основные данные")
+ContainerDb(device_state_cache, "Device State Cache", "Redis", "Текущие состояния")
+
+Container_Boundary(device_service, "Device Management Service") {
+    Component(device_api, "Device API", "Gin REST API", "REST эндпоинты для управления устройствами")
+    Component(device_controller, "Device Controller", "Go", "Обработка команд управления устройствами")
+    Component(device_registry, "Device Registry", "Go", "Регистрация и конфигурация устройств")
+    Component(state_manager, "State Manager", "Go", "Отслеживание состояния устройств")
+    Component(command_dispatcher, "Command Dispatcher", "Go", "Отправка команд на устройства")
+    Component(event_publisher, "Event Publisher", "Go", "Публикация событий изменения состояний")
+    Component(device_repository, "Device Repository", "Go", "Слой доступа к данным устройств")
+}
+
+System_Ext(smart_devices, "Умные устройства", "Отопление, освещение, ворота, камеры")
+
+Rel(api_gateway, device_api, "Управление устройствами", "HTTP REST")
+
+Rel(device_api, device_controller, "Обработка команд управления", "Go interface")
+Rel(device_api, device_registry, "Регистрация устройств", "Go interface")
+Rel(device_api, state_manager, "Запрос состояния", "Go interface")
+
+Rel(device_controller, command_dispatcher, "Отправка команд", "Go interface")
+Rel(device_controller, state_manager, "Обновление состояния", "Go interface")
+Rel(device_controller, event_publisher, "Публикация событий", "Go interface")
+Rel(state_manager, device_state_cache, "Проверка/обновление состояний", "Redis GET/SET")
+
+Rel(device_registry, device_repository, "Сохранение конфигурации", "Go interface")
+Rel(state_manager, device_repository, "Чтение/запись состояния", "Go interface")
+
+Rel(device_repository, main_db, "SQL запросы", "PostgreSQL")
+
+Rel(command_dispatcher, smart_devices, "Команды управления", "HTTP/MQTT")
+
+Rel(event_publisher, message_queue, "Публикация событий устройств", "Redis pub/sub")
+
+Rel(automation_service, device_api, "Выполнение сценариев на основе состояний", "HTTP/gRPC")
+
+SHOW_LEGEND()
+@enduml

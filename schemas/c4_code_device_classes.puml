@@ -1,0 +1,151 @@
+@startuml c4_code_device_classes
+!define LIGHTBLUE #E1F5FE
+!define LIGHTGREEN #E8F5E8
+!define LIGHTYELLOW #FFF8E1
+
+title Основные классы управления устройствами
+
+package "Domain Models" LIGHTBLUE {
+    class Device {
+        +ID: string
+        +Name: string
+        +Type: DeviceType
+        +Location: string
+        +HouseID: string
+        +Status: DeviceStatus
+        +Configuration: map[string]interface{}
+        +LastSeen: time.Time
+        +CreatedAt: time.Time
+        +UpdatedAt: time.Time
+        --
+        +IsOnline(): bool
+        +CanExecuteCommand(cmd Command): bool
+        +ValidateConfiguration(): error
+    }
+
+    enum DeviceType {
+        HEATING
+        LIGHTING
+        SECURITY_CAMERA
+        GATE
+        SENSOR
+    }
+
+    enum DeviceStatus {
+        ONLINE
+        OFFLINE
+        ERROR
+        MAINTENANCE
+    }
+
+    class Command {
+        +ID: string
+        +DeviceID: string
+        +Action: string
+        +Parameters: map[string]interface{}
+        +UserID: string
+        +Timestamp: time.Time
+        +Status: CommandStatus
+        --
+        +Validate(): error
+        +ToJSON(): []byte
+    }
+
+    enum CommandStatus {
+        PENDING
+        EXECUTING
+        COMPLETED
+        FAILED
+        TIMEOUT
+    }
+}
+
+package "Repository Layer" LIGHTGREEN {
+    interface DeviceRepository {
+        +GetByID(id string): (*Device, error)
+        +GetByHouseID(houseID string): ([]*Device, error)
+        +Create(device *Device): error
+        +Update(device *Device): error
+        +Delete(id string): error
+        +GetByStatus(status DeviceStatus): ([]*Device, error)
+    }
+
+    class PostgreSQLDeviceRepository {
+        -db: *sql.DB
+        --
+        +GetByID(id string): (*Device, error)
+        +GetByHouseID(houseID string): ([]*Device, error)
+        +Create(device *Device): error
+        +Update(device *Device): error
+        +Delete(id string): error
+        +GetByStatus(status DeviceStatus): ([]*Device, error)
+    }
+}
+
+package "Service Layer" LIGHTYELLOW {
+    class DeviceController {
+        -repository: DeviceRepository
+        -stateManager: StateManager
+        -commandDispatcher: CommandDispatcher
+        -eventPublisher: EventPublisher
+        --
+        +ExecuteCommand(deviceID string, cmd Command): error
+        +GetDeviceState(deviceID string): (*Device, error)
+        +RegisterDevice(device *Device): error
+        +UpdateDevice(device *Device): error
+    }
+
+    class StateManager {
+        -deviceStateCache: RedisCache
+        -repository: DeviceRepository
+        --
+        +GetDeviceState(deviceID string): (*Device, error)
+        +UpdateDeviceState(deviceID string, state map[string]interface{}): error
+        +InvalidateCache(deviceID string): error
+        -loadFromDB(deviceID string): (*Device, error)
+        -saveToCache(device *Device): error
+    }
+
+    class CommandDispatcher {
+        -httpClient: *http.Client
+        -mqttClient: MQTTClient
+        --
+        +SendCommand(device *Device, cmd Command): error
+        +SendHTTPCommand(device *Device, cmd Command): error
+        +SendMQTTCommand(device *Device, cmd Command): error
+        -buildDeviceURL(device *Device): string
+        -retryCommand(device *Device, cmd Command, attempts int): error
+    }
+
+    interface EventPublisher {
+        +PublishDeviceStateChanged(device *Device): error
+        +PublishCommandExecuted(cmd Command): error
+        +PublishDeviceError(deviceID string, err error): error
+    }
+
+    class RedisEventPublisher {
+        -redisClient: *redis.Client
+        --
+        +PublishDeviceStateChanged(device *Device): error
+        +PublishCommandExecuted(cmd Command): error
+        +PublishDeviceError(deviceID string, err error): error
+        -publishEvent(topic string, payload interface{}): error
+    }
+}
+
+Device ||--|| DeviceType
+Device ||--|| DeviceStatus
+Command ||--|| CommandStatus
+Command }o--|| Device : "targets"
+
+DeviceRepository <|-- PostgreSQLDeviceRepository
+EventPublisher <|-- RedisEventPublisher
+
+DeviceController *-- DeviceRepository
+DeviceController *-- StateManager
+DeviceController *-- CommandDispatcher
+DeviceController *-- EventPublisher
+
+StateManager *-- DeviceRepository
+
+@enduml
