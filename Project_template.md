@@ -555,61 +555,130 @@ _Добавьте сюда диаграмму контекста в модели
 
 - **[Telemetry Events API](schemas/telemetry-events-asyncapi.yaml)** - описывает структуру телеметрических событий (измерения температуры, команды устройств), которые публикуются в очередь Redis
 
-# Задание 5. Работа с docker и docker-compose
+# Задание 5. Работа с docker и docker-compose ✅
 
-Перейдите в apps.
+## Результаты тестирования
 
-Там находится приложение-монолит для работы с датчиками температуры. В README.md описано как запустить решение.
+### Запуск системы
 
-Вам нужно:
-
-1. сделать простое приложение temperature-api на любом удобном для вас языке программирования, которое при запросе /temperature?location= будет отдавать рандомное значение температуры.
-
-Locations - название комнаты, sensorId - идентификатор названия комнаты
-
-```
-	// If no location is provided, use a default based on sensor ID
-	if location == "" {
-		switch sensorID {
-		case "1":
-			location = "Living Room"
-		case "2":
-			location = "Bedroom"
-		case "3":
-			location = "Kitchen"
-		default:
-			location = "Unknown"
-		}
-	}
-
-	// If no sensor ID is provided, generate one based on location
-	if sensorID == "" {
-		switch location {
-		case "Living Room":
-			sensorID = "1"
-		case "Bedroom":
-			sensorID = "2"
-		case "Kitchen":
-			sensorID = "3"
-		default:
-			sensorID = "0"
-		}
-	}
+```bash
+cd apps
+docker-compose up -d
 ```
 
-2. Приложение следует упаковать в Docker и добавить в docker-compose. Порт по умолчанию должен быть 8081
+**Статус контейнеров:**
 
-3) Кроме того для smart_home приложения требуется база данных - добавьте в docker-compose файл настройки для запуска postgres с указанием скрипта инициализации ./smart_home/init.sql
+```
+NAME                 SERVICE           STATUS                    PORTS
+smarthome-app        app               Up                        0.0.0.0:8080->8080/tcp
+smarthome-postgres   postgres          Up (healthy)              5432/tcp
+temperature-api      temperature-api   Up (health: starting)     0.0.0.0:8081->8081/tcp
+```
 
-Для проверки можно использовать Postman коллекцию smarthome-api.postman_collection.json и вызвать:
+### Тестирование Temperature API (порт 8081)
 
-- Create Sensor
-- Get All Sensors
+**1. Тестирование по ID сенсора:**
 
-Должно при каждом вызове отображаться разное значение температуры
+```bash
+curl http://localhost:8081/temperature/1
+```
 
-Ревьюер будет проверять точно так же.
+```json
+{
+  "value": 23.97,
+  "unit": "°C",
+  "timestamp": "2025-08-03T17:36:56.35659648Z",
+  "location": "Living Room",
+  "status": "active",
+  "sensor_id": "1",
+  "sensor_type": "temperature",
+  "description": "Temperature sensor in Living Room"
+}
+```
 
----
+**2. Тестирование по локации:**
 
-Пятое задание — дополнительное. Его можно сделать по желанию. Чтобы ревьюер быстрее проверил ваше решение, укажите, сделали вы это задание или нет. Для этого оставьте нужный эмодзи около заголовка задания:
+```bash
+curl "http://localhost:8081/temperature?location=Kitchen"
+```
+
+```json
+{
+  "value": 26.0,
+  "unit": "°C",
+  "timestamp": "2025-08-03T17:37:03.939415341Z",
+  "location": "Kitchen",
+  "status": "active",
+  "sensor_id": "3",
+  "sensor_type": "temperature",
+  "description": "Temperature sensor in Kitchen"
+}
+```
+
+### Тестирование Smart Home API (порт 8080)
+
+**1. Create Sensor (Postman коллекция):**
+
+```bash
+curl -X POST http://localhost:8080/api/v1/sensors \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Living Room Temperature", "type": "temperature", "location": "Living Room", "unit": "°C"}'
+```
+
+```json
+{
+  "id": 1,
+  "name": "Living Room Temperature",
+  "type": "temperature",
+  "location": "Living Room",
+  "value": 0,
+  "unit": "°C",
+  "status": "inactive",
+  "last_updated": "2025-08-03T17:38:27.638818Z",
+  "created_at": "2025-08-03T17:38:27.638818Z"
+}
+```
+
+**2. Get All Sensors - первый вызов:**
+
+```bash
+curl http://localhost:8080/api/v1/sensors
+```
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Living Room Temperature",
+    "type": "temperature",
+    "location": "Living Room",
+    "value": 18.52,
+    "unit": "°C",
+    "status": "active",
+    "last_updated": "2025-08-03T17:38:43.355196635Z",
+    "created_at": "2025-08-03T17:38:27.638818Z"
+  }
+]
+```
+
+**3. Get All Sensors - второй вызов (демонстрация изменения температуры):**
+
+```bash
+curl http://localhost:8080/api/v1/sensors
+```
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Living Room Temperature",
+    "type": "temperature",
+    "location": "Living Room",
+    "value": 27.49,
+    "unit": "°C",
+    "status": "active",
+    "last_updated": "2025-08-03T17:38:51.224255732Z",
+    "created_at": "2025-08-03T17:38:27.638818Z"
+  }
+]
+```
