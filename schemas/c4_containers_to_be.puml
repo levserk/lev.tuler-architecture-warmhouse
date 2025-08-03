@@ -1,0 +1,83 @@
+@startuml c4_containers_to_be
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+!define LAYOUT_WITH_LEGEND
+
+title Диаграмма контейнеров экосистемы "Тёплый дом" (To-Be)
+
+Person(user, "Пользователь", "Владелец дома, самостоятельно управляет экосистемой умного дома")
+
+System_Boundary(smart_ecosystem, "Экосистема умного дома") {
+    
+    Container_Boundary(presentation, "Презентационный слой") {
+        Container(user_interface, "Web Interface", "SPA/PWA", "Самообслуживание")
+        Container(api_gateway, "API Gateway", "Kong/Nginx", "Единая точка входа")
+    }
+    
+    Container_Boundary(business, "Бизнес-сервисы") {
+        Container(user_service, "User Service", "Go", "Авторизация")
+        Container(device_service, "Device Service", "Go", "Управление устройствами")
+        Container(telemetry_service, "Telemetry Service", "Go", "Сбор телеметрии")
+        Container(automation_service, "Automation Service", "Go", "Сценарии")
+        Container(notification_service, "Notification Service", "Go", "Уведомления")
+    }
+    
+    Container_Boundary(data, "Слой данных") {
+        ContainerDb(main_db, "PostgreSQL", "PostgreSQL", "Основные данные")
+        ContainerDb(telemetry_db, "InfluxDB", "InfluxDB", "Временные ряды")
+        Container(message_queue, "Message Queue", "Redis", "Асинхронные события")
+        ContainerDb(device_state_cache, "Device State Cache", "Redis", "Текущие состояния устройств")
+    }
+}
+
+' === УСТРОЙСТВА УМНОГО ДОМА ===
+System_Ext(smart_devices, "Умные устройства", "Отопление, освещение, ворота, камеры")
+System_Ext(sensors, "IoT Датчики", "Температура, влажность, движение")
+
+' === ВНЕШНИЕ СЕРВИСЫ ===
+System_Ext(notification_providers, "Провайдеры уведомлений", "Email, SMS, Push-уведомления")
+
+' === ПОЛЬЗОВАТЕЛЬ ===
+Rel_Down(user, user_interface, "Управляет экосистемой", "HTTPS")
+Rel_Down(user_interface, api_gateway, "Отправляет API запросы", "REST")
+Rel_Up(notification_providers, user, "Доставляет уведомления", "Email/SMS/Push")
+
+' === API GATEWAY → СЕРВИСЫ ===
+Rel_Down(api_gateway, user_service, "Проверяет авторизацию", "HTTP REST")
+Rel_Down(api_gateway, device_service, "Управляет устройствами", "HTTP REST")
+Rel_Down(api_gateway, telemetry_service, "Получает телеметрию", "HTTP REST")
+Rel_Down(api_gateway, automation_service, "Управляет сценариями", "HTTP REST")
+
+' === ДАННЫЕ ===
+Rel_Down(user_service, main_db, "Сохраняет профили пользователей", "SQL")
+Rel_Down(device_service, main_db, "Сохраняет данные устройств", "SQL")
+Rel_Down(automation_service, main_db, "Сохраняет сценарии", "SQL")
+Rel_Down(telemetry_service, telemetry_db, "Записывает временные ряды", "InfluxQL")
+
+' === КЭШИРОВАНИЕ СОСТОЯНИЙ ===
+Rel_Down(telemetry_service, device_state_cache, "Обновляет текущие состояния", "Redis SET")
+Rel_Up(device_state_cache, automation_service, "Читает состояния для сценариев", "Redis GET")
+Rel_Up(device_state_cache, device_service, "Проверяет состояния перед командой", "Redis GET")
+
+' === СОБЫТИЯ ===
+Rel_Right(device_service, message_queue, "Публикует события устройств", "Redis pub/sub")
+Rel_Right(telemetry_service, message_queue, "Публикует события сенсоров", "Redis pub/sub")
+Rel_Left(message_queue, telemetry_service, "Подписка на события устройств", "Redis pub/sub")
+Rel_Left(message_queue, automation_service, "Получает триггеры", "Redis pub/sub")
+Rel_Left(message_queue, notification_service, "Получает алерты", "Redis pub/sub")
+
+' === МЕЖСЕРВИСНЫЕ ВЗАИМОДЕЙСТВИЯ ===
+Rel_Right(automation_service, device_service, "Выполнение сценариев на основе состояний", "HTTP/gRPC")
+
+' === УСТРОЙСТВА ===
+Rel_Up(device_service, smart_devices, "Отправляет команды управления", "MQTT/HTTP")
+Rel_Down(sensors, telemetry_service, "Передает телеметрию", "MQTT/HTTP")
+Rel_Up(notification_service, notification_providers, "Отправляет уведомления", "API")
+
+' === ПРОСТЫЕ LAYOUT HINTS ===
+' Только основная структура слоев
+Lay_D(presentation, business)
+Lay_D(business, data)
+
+SHOW_LEGEND()
+@enduml
