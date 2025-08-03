@@ -5,8 +5,6 @@
 
 title ER-диаграмма основных сущностей экосистемы "Тёплый дом"
 
-' === ОСНОВНЫЕ СУЩНОСТИ СИСТЕМЫ ===
-
 entity User {
     * id : UUID <<PK>>
     --
@@ -107,9 +105,7 @@ entity Notification {
     * sent_at : TIMESTAMP
 }
 
-' === СВЯЗИ МЕЖДУ СУЩНОСТЯМИ ===
 
-' Основные связи
 User ||--o{ House : "владеет"
 User ||--o{ UserHouseAccess : "имеет доступ"
 House ||--o{ UserHouseAccess : "предоставляет доступ"
@@ -117,18 +113,14 @@ User ||--o{ UserHouseAccess : "выдает права"
 House ||--o{ Device : "содержит"
 DeviceType ||--o{ Device : "определяет тип"
 
-' Команды и управление
 User ||--o{ Command : "отправляет"
 Device ||--o{ Command : "получает"
 
-' Телеметрия
 Device ||--o{ TelemetryData : "генерирует"
 
-' Автоматизация
 House ||--o{ Scenario : "содержит"
 User ||--o{ Scenario : "создает"
 
-' Уведомления
 User ||--o{ Notification : "получает"
 
 

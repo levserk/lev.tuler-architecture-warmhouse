@@ -30,52 +30,51 @@ System_Boundary(smart_ecosystem, "Экосистема умного дома") {
     }
 }
 
-' === УСТРОЙСТВА УМНОГО ДОМА ===
+
 System_Ext(smart_devices, "Умные устройства", "Отопление, освещение, ворота, камеры")
 System_Ext(sensors, "IoT Датчики", "Температура, влажность, движение")
 
-' === ВНЕШНИЕ СЕРВИСЫ ===
+
 System_Ext(notification_providers, "Провайдеры уведомлений", "Email, SMS, Push-уведомления")
 
-' === ПОЛЬЗОВАТЕЛЬ ===
+
 Rel_Down(user, user_interface, "Управляет экосистемой", "HTTPS")
 Rel_Down(user_interface, api_gateway, "Отправляет API запросы", "REST")
 Rel_Up(notification_providers, user, "Доставляет уведомления", "Email/SMS/Push")
 
-' === API GATEWAY → СЕРВИСЫ ===
+
 Rel_Down(api_gateway, user_service, "Проверяет авторизацию", "HTTP REST")
 Rel_Down(api_gateway, device_service, "Управляет устройствами", "HTTP REST")
 Rel_Down(api_gateway, telemetry_service, "Получает телеметрию", "HTTP REST")
 Rel_Down(api_gateway, automation_service, "Управляет сценариями", "HTTP REST")
 
-' === ДАННЫЕ ===
+
 Rel_Down(user_service, main_db, "Сохраняет профили пользователей", "SQL")
 Rel_Down(device_service, main_db, "Сохраняет данные устройств", "SQL")
 Rel_Down(automation_service, main_db, "Сохраняет сценарии", "SQL")
 Rel_Down(telemetry_service, telemetry_db, "Записывает временные ряды", "InfluxQL")
 
-' === КЭШИРОВАНИЕ СОСТОЯНИЙ ===
+
 Rel_Down(telemetry_service, device_state_cache, "Обновляет текущие состояния", "Redis SET")
 Rel_Up(device_state_cache, automation_service, "Читает состояния для сценариев", "Redis GET")
 Rel_Up(device_state_cache, device_service, "Проверяет состояния перед командой", "Redis GET")
 
-' === СОБЫТИЯ ===
+
 Rel_Right(device_service, message_queue, "Публикует события устройств", "Redis pub/sub")
 Rel_Right(telemetry_service, message_queue, "Публикует события сенсоров", "Redis pub/sub")
 Rel_Left(message_queue, telemetry_service, "Подписка на события устройств", "Redis pub/sub")
 Rel_Left(message_queue, automation_service, "Получает триггеры", "Redis pub/sub")
 Rel_Left(message_queue, notification_service, "Получает алерты", "Redis pub/sub")
 
-' === МЕЖСЕРВИСНЫЕ ВЗАИМОДЕЙСТВИЯ ===
+
 Rel_Right(automation_service, device_service, "Выполнение сценариев на основе состояний", "HTTP/gRPC")
 
-' === УСТРОЙСТВА ===
+
 Rel_Up(device_service, smart_devices, "Отправляет команды управления", "MQTT/HTTP")
 Rel_Down(sensors, telemetry_service, "Передает телеметрию", "MQTT/HTTP")
 Rel_Up(notification_service, notification_providers, "Отправляет уведомления", "API")
 
-' === ПРОСТЫЕ LAYOUT HINTS ===
-' Только основная структура слоев
+
 Lay_D(presentation, business)
 Lay_D(business, data)
 

@@ -133,7 +133,6 @@ package "Service Layer" LIGHTYELLOW {
     }
 }
 
-' Relationships
 Device ||--|| DeviceType
 Device ||--|| DeviceStatus
 Command ||--|| CommandStatus

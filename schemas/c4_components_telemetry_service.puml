@@ -21,13 +21,10 @@ Container_Boundary(telemetry_service, "Telemetry Service") {
 
 System_Ext(sensors, "IoT Датчики", "Температура, влажность, движение")
 
-' External requests
 Rel(api_gateway, telemetry_api, "HTTP запросы данных", "REST/JSON")
 
-' Sensor data collection
 Rel(sensors, data_collector, "Данные датчиков", "HTTP/MQTT")
 
-' Internal component interactions
 Rel(telemetry_api, analytics_engine, "Запросы аналитики", "Go interface")
 Rel(telemetry_api, data_repository, "Запросы исторических данных", "Go interface")
 
@@ -39,11 +36,9 @@ Rel(data_processor, alert_detector, "Данные для анализа", "Go in
 Rel(analytics_engine, data_repository, "Запросы для аналитики", "Go interface")
 Rel(alert_detector, message_queue, "Критические алерты", "Redis pub/sub")
 
-' Event handling
 Rel(event_subscriber, message_queue, "События устройств", "Redis pub/sub")
 Rel(event_subscriber, data_processor, "Контекст устройств", "Go interface")
 
-' Database interactions
 Rel(data_repository, telemetry_db, "Запросы временных рядов", "InfluxQL")
 Rel(state_updater, device_state_cache, "Обновление текущих состояний", "Redis SET")
 
