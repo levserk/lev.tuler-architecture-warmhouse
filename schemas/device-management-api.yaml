@@ -1,0 +1,587 @@
+openapi: 3.0.3
+info:
+  title: Device Management Service API
+  description: |
+    API for managing smart home devices in the "Warm House" ecosystem.
+
+    Core functions:
+    - Device registration and configuration
+    - Sending device control commands
+    - Device status monitoring
+    - Retrieving current device readings
+  version: 1.0.0
+  contact:
+    name: Warm House API Support
+    email: api-support@warmhouse.ru
+
+servers:
+  - url: https://api.warmhouse.ru/v1/devices
+    description: Production API Gateway
+  - url: https://stage-api.warmhouse.ru/v1/devices
+    description: Staging environment
+
+paths:
+  /devices:
+    get:
+      summary: Get house devices list
+      description: Returns list of all devices available to current user
+      tags:
+        - Devices
+      parameters:
+        - name: house_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: House ID for device filtering
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [online, offline, error, maintenance]
+          description: Filter by device status
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [heating, lighting, security, sensor]
+          description: Filter by device type
+      responses:
+        "200":
+          description: Device list successfully retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+                  total:
+                    type: integer
+                    description: Total number of devices
+              examples:
+                devices_list:
+                  summary: House devices list
+                  value:
+                    devices:
+                      - id: "123e4567-e89b-12d3-a456-426614174000"
+                        name: "Living Room Thermostat"
+                        serial_number: "TH-001-2024"
+                        type_id: "heating-thermostat"
+                        house_id: "house-uuid"
+                        location: "Living Room"
+                        status: "online"
+                        configuration:
+                          target_temperature: 22
+                          mode: "auto"
+                        last_seen: "2024-01-15T10:30:00Z"
+                        current_state:
+                          temperature: 21.5
+                          heating_active: true
+                    total: 1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      summary: Register new device
+      description: Adds new device to system with compatibility validation
+      tags:
+        - Devices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceRequest"
+            examples:
+              new_thermostat:
+                summary: Thermostat registration
+                value:
+                  name: "Bedroom Thermostat"
+                  serial_number: "TH-002-2024"
+                  type_id: "heating-thermostat"
+                  house_id: "house-uuid"
+                  location: "Bedroom"
+                  configuration:
+                    target_temperature: 20
+                    mode: "manual"
+      responses:
+        "201":
+          description: Device successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Device with this serial_number already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /devices/{device_id}:
+    get:
+      summary: Get device information
+      description: Returns detailed device information including current state
+      tags:
+        - Devices
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Unique device identifier
+      responses:
+        "200":
+          description: Device information retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      summary: Update device configuration
+      description: Changes device settings
+      tags:
+        - Devices
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeviceRequest"
+      responses:
+        "200":
+          description: Device updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      summary: Delete device
+      description: Removes device from system
+      tags:
+        - Devices
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Device successfully deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Cannot delete device (has active scenarios)
+
+  /devices/{device_id}/commands:
+    post:
+      summary: Send command to device
+      description: Executes device control command (turn on/off, change settings)
+      tags:
+        - Commands
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandRequest"
+            examples:
+              set_temperature:
+                summary: Set temperature
+                value:
+                  action: "set_temperature"
+                  parameters:
+                    temperature: 23
+                    mode: "auto"
+              turn_on_light:
+                summary: Turn on light
+                value:
+                  action: "turn_on"
+                  parameters:
+                    brightness: 80
+      responses:
+        "202":
+          description: Command accepted for execution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Command"
+              examples:
+                command_accepted:
+                  summary: Command accepted
+                  value:
+                    id: "cmd-uuid"
+                    device_id: "device-uuid"
+                    user_id: "user-uuid"
+                    action: "set_temperature"
+                    parameters:
+                      temperature: 23
+                      mode: "auto"
+                    status: "pending"
+                    created_at: "2024-01-15T10:35:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Invalid command parameters for this device type
+
+  /devices/{device_id}/state:
+    get:
+      summary: Get current device state
+      description: Returns actual device state from Redis cache
+      tags:
+        - State
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Current device state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceState"
+              examples:
+                thermostat_state:
+                  summary: Thermostat state
+                  value:
+                    device_id: "device-uuid"
+                    timestamp: "2024-01-15T10:35:00Z"
+                    values:
+                      temperature: 21.5
+                      target_temperature: 22
+                      heating_active: true
+                      mode: "auto"
+                    status: "online"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /commands/{command_id}:
+    get:
+      summary: Get command execution status
+      description: Checks status of previously sent command
+      tags:
+        - Commands
+      parameters:
+        - name: command_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Command status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Command"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  schemas:
+    Device:
+      type: object
+      required:
+        - id
+        - name
+        - serial_number
+        - type_id
+        - house_id
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique device identifier
+        name:
+          type: string
+          maxLength: 100
+          description: Device name
+        serial_number:
+          type: string
+          maxLength: 100
+          description: Device serial number
+        type_id:
+          type: string
+          description: Device type identifier
+        house_id:
+          type: string
+          format: uuid
+          description: House ID where device belongs
+        location:
+          type: string
+          maxLength: 100
+          description: Device location in house
+        status:
+          type: string
+          enum: [online, offline, error, maintenance]
+          description: Current device status
+        configuration:
+          type: object
+          description: Device configuration (JSON)
+        last_seen:
+          type: string
+          format: date-time
+          description: Last device connection time
+        created_at:
+          type: string
+          format: date-time
+          description: Device registration time
+        current_state:
+          type: object
+          description: Current device parameter values
+          additionalProperties: true
+
+    CreateDeviceRequest:
+      type: object
+      required:
+        - name
+        - serial_number
+        - type_id
+        - house_id
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        serial_number:
+          type: string
+          maxLength: 100
+        type_id:
+          type: string
+        house_id:
+          type: string
+          format: uuid
+        location:
+          type: string
+          maxLength: 100
+        configuration:
+          type: object
+
+    UpdateDeviceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        location:
+          type: string
+          maxLength: 100
+        configuration:
+          type: object
+
+    Command:
+      type: object
+      required:
+        - id
+        - device_id
+        - user_id
+        - action
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          maxLength: 50
+          description: Command name
+        parameters:
+          type: object
+          description: Command parameters (JSON)
+        status:
+          type: string
+          enum: [pending, executing, completed, failed, timeout]
+        created_at:
+          type: string
+          format: date-time
+        executed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+
+    CommandRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          maxLength: 50
+          description: Command name to execute
+          example: "set_temperature"
+        parameters:
+          type: object
+          description: Command parameters
+          example:
+            temperature: 23
+
+    DeviceState:
+      type: object
+      required:
+        - device_id
+        - timestamp
+        - status
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+          description: Last state update time
+        values:
+          type: object
+          description: Current device parameter values
+          additionalProperties: true
+        status:
+          type: string
+          enum: [online, offline, error]
+
+    DeviceStateValues:
+      type: object
+      description: Current device parameter values
+      additionalProperties: true
+      example:
+        temperature: 21.5
+        target_temperature: 22
+        heating_active: true
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error description
+        details:
+          type: object
+          description: Additional error information
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            validation_error:
+              summary: Validation error
+              value:
+                error: "validation_failed"
+                message: "Required field 'name' is missing"
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "unauthorized"
+            message: "Authentication required"
+
+    Forbidden:
+      description: Access forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "access_denied"
+            message: "Insufficient permissions"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "not_found"
+            message: "Device not found"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained through User Service API.
+        Token must contain access rights to requested house.
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Devices
+    description: Device management
+  - name: Commands
+    description: Device control commands
+  - name: State
+    description: Device state

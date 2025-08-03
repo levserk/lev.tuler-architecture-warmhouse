@@ -1,0 +1,660 @@
+asyncapi: 2.6.0
+info:
+  title: Telemetry Events API
+  version: 1.0.0
+  description: |
+    Asynchronous telemetry and automation events in the "Warm House" ecosystem.
+
+    The system uses Redis as Message Queue for event-driven architecture:
+    - Telemetry Service publishes sensor events
+    - Automation Service subscribes to events for scenario execution
+    - Device Management Service publishes device state change events
+    - Notification Service processes alerts and notifications
+  contact:
+    name: Warm House API Support
+    email: api-support@warmhouse.ru
+
+servers:
+  redis-production:
+    url: redis://redis.warmhouse.ru:6379
+    description: Production Redis Message Queue
+    protocol: redis
+    variables:
+      port:
+        default: "6379"
+        description: Redis port
+
+  redis-staging:
+    url: redis://stage-redis.warmhouse.ru:6379
+    description: Staging Redis Message Queue
+    protocol: redis
+
+defaultContentType: application/json
+
+channels:
+  telemetry/sensor-data:
+    description: Channel for sensor data
+    subscribe:
+      summary: Receive telemetry data from sensors
+      description: |
+        Telemetry Service publishes data from various sensors to this channel.
+        Subscribers: Automation Service, Notification Service
+      operationId: receiveSensorData
+      tags:
+        - name: telemetry
+        - name: sensors
+      message:
+        $ref: "#/components/messages/SensorDataEvent"
+    publish:
+      summary: Send telemetry data
+      description: Telemetry Service publishes sensor data
+      operationId: publishSensorData
+      message:
+        $ref: "#/components/messages/SensorDataEvent"
+
+  telemetry/device-state-changed:
+    description: Channel for device state changes
+    subscribe:
+      summary: Subscribe to device state changes
+      description: |
+        Device state change events from Device Management Service.
+        Subscribers: Telemetry Service (for logging), Automation Service
+      operationId: receiveDeviceStateChange
+      tags:
+        - name: devices
+        - name: state
+      message:
+        $ref: "#/components/messages/DeviceStateChangedEvent"
+    publish:
+      summary: Publish device state changes
+      description: Device Management Service publishes state changes
+      operationId: publishDeviceStateChange
+      message:
+        $ref: "#/components/messages/DeviceStateChangedEvent"
+
+  automation/scenario-triggered:
+    description: Channel for scenario execution events
+    subscribe:
+      summary: Subscribe to scenario events
+      description: |
+        Automation scenario execution events.
+        Subscribers: Notification Service, Telemetry Service (for audit)
+      operationId: receiveScenarioTriggered
+      tags:
+        - name: automation
+        - name: scenarios
+      message:
+        $ref: "#/components/messages/ScenarioTriggeredEvent"
+    publish:
+      summary: Publish scenario events
+      description: Automation Service publishes scenario execution events
+      operationId: publishScenarioTriggered
+      message:
+        $ref: "#/components/messages/ScenarioTriggeredEvent"
+
+  alerts/critical-event:
+    description: Channel for critical events and alerts
+    subscribe:
+      summary: Subscribe to critical events
+      description: |
+        Critical events requiring immediate attention.
+        Subscribers: Notification Service, possibly external monitoring systems
+      operationId: receiveCriticalAlert
+      tags:
+        - name: alerts
+        - name: critical
+      message:
+        $ref: "#/components/messages/CriticalAlertEvent"
+    publish:
+      summary: Publish critical events
+      description: Any service can publish critical events
+      operationId: publishCriticalAlert
+      message:
+        $ref: "#/components/messages/CriticalAlertEvent"
+
+  notifications/user-notification:
+    description: Channel for user notifications
+    subscribe:
+      summary: Subscribe to user notifications
+      description: |
+        Notifications to be sent to users through various channels.
+        Subscribers: Notification Service
+      operationId: receiveUserNotification
+      tags:
+        - name: notifications
+        - name: users
+      message:
+        $ref: "#/components/messages/UserNotificationEvent"
+    publish:
+      summary: Publish user notifications
+      description: Various services can send notifications to users
+      operationId: publishUserNotification
+      message:
+        $ref: "#/components/messages/UserNotificationEvent"
+
+components:
+  messages:
+    SensorDataEvent:
+      name: SensorDataEvent
+      title: Sensor data
+      summary: Event of receiving data from device sensor
+      contentType: application/json
+      tags:
+        - name: telemetry
+      payload:
+        $ref: "#/components/schemas/SensorDataPayload"
+      examples:
+        - name: temperature_sensor
+          summary: Temperature sensor data
+          payload:
+            event_type: "sensor_data"
+            timestamp: "2024-01-15T10:35:00Z"
+            device_id: "123e4567-e89b-12d3-a456-426614174001"
+            house_id: "123e4567-e89b-12d3-a456-426614174000"
+            sensor_type: "temperature"
+            measurements:
+              temperature: 21.5
+              humidity: 45.2
+            unit: "celsius"
+            metadata:
+              location: "Living Room"
+              device_name: "Living Room Thermostat"
+        - name: motion_sensor
+          summary: Motion sensor
+          payload:
+            event_type: "sensor_data"
+            timestamp: "2024-01-15T10:36:00Z"
+            device_id: "123e4567-e89b-12d3-a456-426614174002"
+            house_id: "123e4567-e89b-12d3-a456-426614174000"
+            sensor_type: "motion"
+            measurements:
+              motion_detected: true
+              confidence: 0.95
+            metadata:
+              location: "Hallway"
+              device_name: "Entrance Motion Sensor"
+
+    DeviceStateChangedEvent:
+      name: DeviceStateChangedEvent
+      title: Device state change
+      summary: Event of managed device state change
+      contentType: application/json
+      tags:
+        - name: devices
+      payload:
+        $ref: "#/components/schemas/DeviceStateChangedPayload"
+      examples:
+        - name: thermostat_changed
+          summary: Thermostat settings change
+          payload:
+            event_type: "device_state_changed"
+            timestamp: "2024-01-15T10:37:00Z"
+            device_id: "123e4567-e89b-12d3-a456-426614174003"
+            house_id: "123e4567-e89b-12d3-a456-426614174000"
+            user_id: "123e4567-e89b-12d3-a456-426614174004"
+            device_type: "heating"
+            previous_state:
+              target_temperature: 20
+              mode: "manual"
+              heating_active: false
+            new_state:
+              target_temperature: 22
+              mode: "auto"
+              heating_active: true
+            changed_fields:
+              - "target_temperature"
+              - "mode"
+              - "heating_active"
+            command_id: "123e4567-e89b-12d3-a456-426614174005"
+            metadata:
+              location: "Living Room"
+              device_name: "Living Room Thermostat"
+
+    ScenarioTriggeredEvent:
+      name: ScenarioTriggeredEvent
+      title: Automation scenario execution
+      summary: Event of automation scenario trigger and execution
+      contentType: application/json
+      tags:
+        - name: automation
+      payload:
+        $ref: "#/components/schemas/ScenarioTriggeredPayload"
+      examples:
+        - name: evening_scenario
+          summary: Evening lighting scenario
+          payload:
+            event_type: "scenario_triggered"
+            timestamp: "2024-01-15T18:00:00Z"
+            scenario_id: "123e4567-e89b-12d3-a456-426614174006"
+            scenario_name: "Evening Lighting"
+            house_id: "123e4567-e89b-12d3-a456-426614174000"
+            trigger_type: "schedule"
+            trigger_data:
+              schedule_time: "18:00"
+              timezone: "Europe/Moscow"
+            actions_executed:
+              - action_type: "device_command"
+                device_id: "123e4567-e89b-12d3-a456-426614174007"
+                command: "turn_on"
+                parameters:
+                  brightness: 60
+                  color_temperature: 3000
+                result: "success"
+              - action_type: "device_command"
+                device_id: "123e4567-e89b-12d3-a456-426614174008"
+                command: "turn_on"
+                parameters:
+                  brightness: 80
+                result: "success"
+            execution_status: "completed"
+            execution_duration_ms: 1250
+
+    CriticalAlertEvent:
+      name: CriticalAlertEvent
+      title: Critical event
+      summary: Critical event requiring immediate attention
+      contentType: application/json
+      tags:
+        - name: alerts
+      payload:
+        $ref: "#/components/schemas/CriticalAlertPayload"
+      examples:
+        - name: security_breach
+          summary: Security breach
+          payload:
+            event_type: "critical_alert"
+            timestamp: "2024-01-15T23:45:00Z"
+            alert_id: "123e4567-e89b-12d3-a456-426614174009"
+            house_id: "123e4567-e89b-12d3-a456-426614174000"
+            severity: "critical"
+            alert_type: "security_breach"
+            title: "Unauthorized intrusion detected"
+            description: "Motion sensor in hallway triggered during off-hours with owners away"
+            source_device_id: "123e4567-e89b-12d3-a456-426614174002"
+            affected_devices:
+              - "123e4567-e89b-12d3-a456-426614174010"
+              - "123e4567-e89b-12d3-a456-426614174011"
+            metadata:
+              location: "Hallway"
+              detection_confidence: 0.98
+              user_away: true
+            requires_notification: true
+            auto_actions_triggered:
+              - "activate_alarm"
+              - "start_recording"
+              - "send_notification"
+
+    UserNotificationEvent:
+      name: UserNotificationEvent
+      title: User notification
+      summary: Notification to be sent to user through various channels
+      contentType: application/json
+      tags:
+        - name: notifications
+      payload:
+        $ref: "#/components/schemas/UserNotificationPayload"
+      examples:
+        - name: temperature_alert
+          summary: Temperature notification
+          payload:
+            event_type: "user_notification"
+            timestamp: "2024-01-15T08:30:00Z"
+            notification_id: "123e4567-e89b-12d3-a456-426614174012"
+            user_id: "123e4567-e89b-12d3-a456-426614174004"
+            house_id: "123e4567-e89b-12d3-a456-426614174000"
+            notification_type: "temperature_alert"
+            priority: "medium"
+            title: "Low temperature in house"
+            message: "Temperature in living room dropped to 15°C. Check heating system."
+            channels:
+              - "push"
+              - "email"
+            metadata:
+              device_id: "123e4567-e89b-12d3-a456-426614174001"
+              current_temperature: 15.0
+              location: "Living Room"
+            action_buttons:
+              - label: "Turn on heating"
+                action: "turn_on_heating"
+                device_id: "123e4567-e89b-12d3-a456-426614174003"
+
+  schemas:
+    SensorDataPayload:
+      type: object
+      required:
+        - event_type
+        - timestamp
+        - device_id
+        - house_id
+        - sensor_type
+        - measurements
+      properties:
+        event_type:
+          type: string
+          const: "sensor_data"
+        timestamp:
+          type: string
+          format: date-time
+          description: Data reception time
+        device_id:
+          type: string
+          format: uuid
+          description: Sensor device ID
+        house_id:
+          type: string
+          format: uuid
+          description: House ID
+        sensor_type:
+          type: string
+          enum:
+            [
+              "temperature",
+              "humidity",
+              "motion",
+              "light",
+              "smoke",
+              "door",
+              "window",
+            ]
+          description: Sensor type
+        measurements:
+          type: object
+          description: Measured values (structure depends on sensor type)
+          additionalProperties: true
+        unit:
+          type: string
+          description: Unit of measurement (for numerical values)
+        metadata:
+          type: object
+          properties:
+            location:
+              type: string
+            device_name:
+              type: string
+            battery_level:
+              type: number
+              minimum: 0
+              maximum: 100
+
+    DeviceStateChangedPayload:
+      type: object
+      required:
+        - event_type
+        - timestamp
+        - device_id
+        - house_id
+        - device_type
+        - new_state
+      properties:
+        event_type:
+          type: string
+          const: "device_state_changed"
+        timestamp:
+          type: string
+          format: date-time
+        device_id:
+          type: string
+          format: uuid
+        house_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+          description: User who initiated the change
+        device_type:
+          type: string
+          enum: ["heating", "lighting", "security", "sensor"]
+        previous_state:
+          type: object
+          description: Previous device state
+        new_state:
+          type: object
+          description: New device state
+          additionalProperties: true
+        changed_fields:
+          type: array
+          items:
+            type: string
+          description: List of changed fields
+        command_id:
+          type: string
+          format: uuid
+          description: Command ID that caused the change
+        metadata:
+          type: object
+          properties:
+            location:
+              type: string
+            device_name:
+              type: string
+
+    ScenarioTriggeredPayload:
+      type: object
+      required:
+        - event_type
+        - timestamp
+        - scenario_id
+        - scenario_name
+        - house_id
+        - trigger_type
+        - execution_status
+      properties:
+        event_type:
+          type: string
+          const: "scenario_triggered"
+        timestamp:
+          type: string
+          format: date-time
+        scenario_id:
+          type: string
+          format: uuid
+        scenario_name:
+          type: string
+        house_id:
+          type: string
+          format: uuid
+        trigger_type:
+          type: string
+          enum:
+            [
+              "manual",
+              "schedule",
+              "sensor_event",
+              "device_state",
+              "external_api",
+            ]
+        trigger_data:
+          type: object
+          description: Trigger data (depends on type)
+          additionalProperties: true
+        actions_executed:
+          type: array
+          items:
+            type: object
+            properties:
+              action_type:
+                type: string
+                enum: ["device_command", "notification", "delay", "condition"]
+              device_id:
+                type: string
+                format: uuid
+              command:
+                type: string
+              parameters:
+                type: object
+              result:
+                type: string
+                enum: ["success", "failed", "timeout"]
+              error_message:
+                type: string
+        execution_status:
+          type: string
+          enum: ["started", "completed", "failed", "partially_completed"]
+        execution_duration_ms:
+          type: integer
+          minimum: 0
+
+    CriticalAlertPayload:
+      type: object
+      required:
+        - event_type
+        - timestamp
+        - alert_id
+        - house_id
+        - severity
+        - alert_type
+        - title
+        - description
+      properties:
+        event_type:
+          type: string
+          const: "critical_alert"
+        timestamp:
+          type: string
+          format: date-time
+        alert_id:
+          type: string
+          format: uuid
+        house_id:
+          type: string
+          format: uuid
+        severity:
+          type: string
+          enum: ["low", "medium", "high", "critical"]
+        alert_type:
+          type: string
+          enum:
+            [
+              "security_breach",
+              "fire_detected",
+              "water_leak",
+              "device_failure",
+              "power_outage",
+              "temperature_critical",
+            ]
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        source_device_id:
+          type: string
+          format: uuid
+          description: Device that generated the alert
+        affected_devices:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Devices affected by the event
+        metadata:
+          type: object
+          description: Additional event information
+          additionalProperties: true
+        requires_notification:
+          type: boolean
+          default: true
+        auto_actions_triggered:
+          type: array
+          items:
+            type: string
+          description: Automatic actions performed in response to alert
+
+    UserNotificationPayload:
+      type: object
+      required:
+        - event_type
+        - timestamp
+        - notification_id
+        - user_id
+        - house_id
+        - notification_type
+        - title
+        - message
+        - channels
+      properties:
+        event_type:
+          type: string
+          const: "user_notification"
+        timestamp:
+          type: string
+          format: date-time
+        notification_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        house_id:
+          type: string
+          format: uuid
+        notification_type:
+          type: string
+          enum:
+            [
+              "info",
+              "warning",
+              "alert",
+              "scenario_completed",
+              "device_status",
+              "temperature_alert",
+              "security_alert",
+            ]
+        priority:
+          type: string
+          enum: ["low", "medium", "high", "critical"]
+          default: "medium"
+        title:
+          type: string
+          maxLength: 200
+        message:
+          type: string
+          maxLength: 1000
+        channels:
+          type: array
+          items:
+            type: string
+            enum: ["push", "email", "sms", "in_app"]
+          description: Channels for sending notification
+        metadata:
+          type: object
+          description: Additional notification data
+          additionalProperties: true
+        action_buttons:
+          type: array
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              action:
+                type: string
+              device_id:
+                type: string
+                format: uuid
+              parameters:
+                type: object
+        expires_at:
+          type: string
+          format: date-time
+          description: Notification expiration time
+
+  securitySchemes:
+    redisAuth:
+      type: userPassword
+      description: |
+        Authentication for Redis is used in production environment.
+        May be disabled in development.
+
+tags:
+  - name: telemetry
+    description: Telemetry events from sensors
+  - name: devices
+    description: Managed device events
+  - name: automation
+    description: Automation and scenario events
+  - name: alerts
+    description: Critical events and alerts
+  - name: notifications
+    description: User notifications

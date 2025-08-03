@@ -1,0 +1,756 @@
+openapi: 3.0.3
+info:
+  title: User Service API
+  description: |
+    API for managing users and houses in the "Warm House" ecosystem.
+
+    Core functions:
+    - User authentication and authorization
+    - User profile management
+    - House and access rights management
+    - SaaS model with multi-level access
+  version: 1.0.0
+  contact:
+    name: Warm House API Support
+    email: api-support@warmhouse.ru
+
+servers:
+  - url: https://api.warmhouse.ru/v1/users
+    description: Production API Gateway
+  - url: https://stage-api.warmhouse.ru/v1/users
+    description: Staging environment
+
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      description: User authentication with JWT token retrieval
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              login_example:
+                summary: Login with email and password
+                value:
+                  email: "user@example.com"
+                  password: "secure_password123"
+      responses:
+        "200":
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+              examples:
+                login_success:
+                  summary: Successful login
+                  value:
+                    access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    refresh_token: "refresh_token_here"
+                    expires_in: 3600
+                    user:
+                      id: "user-uuid"
+                      email: "user@example.com"
+                      first_name: "Ivan"
+                      last_name: "Petrov"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "invalid_credentials"
+                message: "Invalid email or password"
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      description: Get new access_token using refresh_token
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid refresh_token
+
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Create new user account
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            examples:
+              register_example:
+                summary: User registration
+                value:
+                  email: "newuser@example.com"
+                  password: "secure_password123"
+                  first_name: "Anna"
+                  last_name: "Ivanova"
+                  phone: "+7 (999) 123-45-67"
+      responses:
+        "201":
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "409":
+          description: User with this email already exists
+
+  /profile:
+    get:
+      summary: Get current user profile
+      description: Returns information about authenticated user profile
+      tags:
+        - Profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      summary: Update user profile
+      description: Change profile information
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /houses:
+    get:
+      summary: Get user houses list
+      description: Returns all houses the user has access to
+      tags:
+        - Houses
+      responses:
+        "200":
+          description: Houses list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  houses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/HouseWithAccess"
+                  total:
+                    type: integer
+              examples:
+                houses_list:
+                  summary: User houses
+                  value:
+                    houses:
+                      - id: "house-uuid-1"
+                        name: "Country House"
+                        address: "15 Forest St"
+                        access_level: "owner"
+                        owner:
+                          id: "user-uuid"
+                          first_name: "Ivan"
+                          last_name: "Petrov"
+                      - id: "house-uuid-2"
+                        name: "City Apartment"
+                        address: "25 Central St, apt. 10"
+                        access_level: "user"
+                        owner:
+                          id: "owner-uuid"
+                          first_name: "Maria"
+                          last_name: "Sidorova"
+                    total: 2
+
+    post:
+      summary: Create new house
+      description: Adds new house to system with current user as owner
+      tags:
+        - Houses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHouseRequest"
+            examples:
+              new_house:
+                summary: House creation
+                value:
+                  name: "Summer House"
+                  address: "Sunny Village, plot 42"
+      responses:
+        "201":
+          description: House created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/House"
+
+  /houses/{house_id}:
+    get:
+      summary: Get house information
+      description: Detailed house information
+      tags:
+        - Houses
+      parameters:
+        - name: house_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: House information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HouseWithAccess"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    put:
+      summary: Update house information
+      description: Change house name and address (owner only)
+      tags:
+        - Houses
+      parameters:
+        - name: house_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHouseRequest"
+      responses:
+        "200":
+          description: House updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/House"
+        "403":
+          description: Only owner can modify house
+
+  /houses/{house_id}/access:
+    get:
+      summary: Get house access list
+      description: Shows all users with house access (owner/admin only)
+      tags:
+        - Access Management
+      parameters:
+        - name: house_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Access list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_list:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UserHouseAccess"
+              examples:
+                access_list:
+                  summary: House access list
+                  value:
+                    access_list:
+                      - id: "access-uuid-1"
+                        user:
+                          id: "user-uuid-1"
+                          email: "admin@example.com"
+                          first_name: "Admin"
+                          last_name: "System"
+                        access_level: "admin"
+                        granted_at: "2024-01-01T12:00:00Z"
+                        is_active: true
+                      - id: "access-uuid-2"
+                        user:
+                          id: "user-uuid-2"
+                          email: "guest@example.com"
+                          first_name: "Guest"
+                          last_name: "Temporary"
+                        access_level: "guest"
+                        granted_at: "2024-01-10T15:30:00Z"
+                        is_active: true
+
+    post:
+      summary: Grant house access
+      description: Adds user access rights to house
+      tags:
+        - Access Management
+      parameters:
+        - name: house_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrantAccessRequest"
+            examples:
+              grant_access:
+                summary: Grant access
+                value:
+                  user_email: "friend@example.com"
+                  access_level: "user"
+      responses:
+        "201":
+          description: Access granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserHouseAccess"
+        "404":
+          description: User with specified email not found
+        "409":
+          description: User already has access to this house
+
+  /houses/{house_id}/access/{access_id}:
+    put:
+      summary: Change access level
+      description: Updates user access rights to house
+      tags:
+        - Access Management
+      parameters:
+        - name: house_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: access_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - access_level
+              properties:
+                access_level:
+                  type: string
+                  enum: [admin, user, guest]
+      responses:
+        "200":
+          description: Access level changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserHouseAccess"
+
+    delete:
+      summary: Revoke house access
+      description: Removes user access rights to house
+      tags:
+        - Access Management
+      parameters:
+        - name: house_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: access_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Access revoked
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Cannot revoke access from house owner
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - first_name
+        - last_name
+        - created_at
+        - is_active
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique user identifier
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: User email (unique)
+        first_name:
+          type: string
+          maxLength: 100
+          description: First name
+        last_name:
+          type: string
+          maxLength: 100
+          description: Last name
+        phone:
+          type: string
+          maxLength: 20
+          nullable: true
+          description: Phone number
+        created_at:
+          type: string
+          format: date-time
+          description: Registration date
+        is_active:
+          type: boolean
+          description: Account active status
+
+    House:
+      type: object
+      required:
+        - id
+        - name
+        - address
+        - owner_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+          description: House name
+        address:
+          type: string
+          description: House address
+        owner_id:
+          type: string
+          format: uuid
+          description: House owner ID
+        created_at:
+          type: string
+          format: date-time
+
+    HouseWithAccess:
+      allOf:
+        - $ref: "#/components/schemas/House"
+        - type: object
+          properties:
+            access_level:
+              type: string
+              enum: [owner, admin, user, guest]
+              description: Current user access level
+            owner:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+
+    UserHouseAccess:
+      type: object
+      required:
+        - id
+        - user
+        - house_id
+        - access_level
+        - granted_at
+        - is_active
+      properties:
+        id:
+          type: string
+          format: uuid
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+              format: email
+            first_name:
+              type: string
+            last_name:
+              type: string
+        house_id:
+          type: string
+          format: uuid
+        access_level:
+          type: string
+          enum: [owner, admin, user, guest]
+          description: |
+            - owner: full access, house and user management
+            - admin: device and user management
+            - user: device management
+            - guest: view only
+        granted_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: Who granted access
+        granted_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - first_name
+        - last_name
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 8
+          description: Minimum 8 characters
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          maxLength: 20
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          maxLength: 20
+
+    CreateHouseRequest:
+      type: object
+      required:
+        - name
+        - address
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+
+    UpdateHouseRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+
+    GrantAccessRequest:
+      type: object
+      required:
+        - user_email
+        - access_level
+      properties:
+        user_email:
+          type: string
+          format: email
+          description: Email of user to grant access to
+        access_level:
+          type: string
+          enum: [admin, user, guest]
+          description: Access level (owner is set only when creating house)
+
+    AuthResponse:
+      type: object
+      required:
+        - access_token
+        - refresh_token
+        - expires_in
+        - user
+      properties:
+        access_token:
+          type: string
+          description: JWT token for authorization
+        refresh_token:
+          type: string
+          description: Token for refreshing access_token
+        expires_in:
+          type: integer
+          description: Access_token lifetime in seconds
+        user:
+          $ref: "#/components/schemas/User"
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error description
+        details:
+          type: object
+          description: Additional information
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "unauthorized"
+            message: "Authentication required"
+
+    Forbidden:
+      description: Access forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "access_denied"
+            message: "Insufficient permissions"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token contains user information and access rights.
+        Obtained through /auth/login endpoint.
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Authentication
+    description: Authentication and authorization
+  - name: Profile
+    description: User profile management
+  - name: Houses
+    description: House management
+  - name: Access Management
+    description: House access rights management
